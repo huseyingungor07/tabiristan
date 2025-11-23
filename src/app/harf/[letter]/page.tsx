@@ -12,6 +12,7 @@ type Props = {
 // Dinamik Metadata
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { letter } = await params;
+  const decodedLetter = decodeURIComponent(letter);
   const upperLetter = letter.toLocaleUpperCase('tr-TR');
   
   return {
@@ -27,7 +28,7 @@ export const revalidate = 3600; // 1 saatte bir güncelle
 
 export default async function HarfPage({ params }: Props) {
   const { letter } = await params;
-  
+  const decodedLetter = decodeURIComponent(letter);
   // Harfi Türkçe karakter uyumlu büyüt (i -> İ, ş -> Ş gibi)
   const upperLetter = letter.toLocaleUpperCase('tr-TR');
 
