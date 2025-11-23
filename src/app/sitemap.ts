@@ -14,6 +14,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!ruyalar) {
     return [];
   }
+  
+  // YENİ: Harf sayfalarını oluştur
+  const ALFABE = "abcdefgğhıijklmnoöprsştuüvyz".split("");
+  const letterUrls: MetadataRoute.Sitemap = ALFABE.map(char => ({
+    url: `${BASE_URL}/harf/${char}`,
+    lastModified: new Date(),
+    changeFrequency: 'weekly',
+    priority: 0.9, // Ana sayfa kadar önemli
+  }));
+
+  
 
   // 2. Rüyaları sitemap formatına çevir
   const ruyaEntries: MetadataRoute.Sitemap = ruyalar.map((ruya) => ({
@@ -31,6 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 1,
     },
+    ...letterUrls,
     ...ruyaEntries,
   ];
 }
