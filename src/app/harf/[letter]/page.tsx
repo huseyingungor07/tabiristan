@@ -12,14 +12,16 @@ type Props = {
 // Dinamik Metadata
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { letter } = await params;
+  
+  // DÜZELTME 1: Decode işlemi eklendi
   const decodedLetter = decodeURIComponent(letter);
-  const upperLetter = letter.toLocaleUpperCase('tr-TR');
+  const upperLetter = decodedLetter.toLocaleUpperCase('tr-TR');
   
   return {
     title: `${upperLetter} Harfi ile Başlayan Rüyalar | Tabiristan`,
     description: `${upperLetter} harfi ile başlayan en popüler rüya tabirleri listesi.`,
     alternates: {
-        canonical: `https://tabiristan.com/harf/${letter}`,
+        canonical: `https://tabiristan.com/harf/${decodedLetter}`, // Canonical'da da düzgün görünsün
     }
   };
 }
@@ -28,23 +30,18 @@ export const revalidate = 3600; // 1 saatte bir güncelle
 
 export default async function HarfPage({ params }: Props) {
   const { letter } = await params;
+  
+  // DÜZELTME 2: Decode işlemi eklendi
   const decodedLetter = decodeURIComponent(letter);
-  // Harfi Türkçe karakter uyumlu büyüt (i -> İ, ş -> Ş gibi)
-  const upperLetter = letter.toLocaleUpperCase('tr-TR');
+  const upperLetter = decodedLetter.toLocaleUpperCase('tr-TR');
 
-  // Supabase Sorgusu: "Rüyada [Harf]..." ile başlayanları bul
-  // Örn: "Rüyada Elma..." -> 'Rüyada E%'
+  // Supabase Sorgusu
   const { data: ruyalar } = await supabase
     .from('ruyalar')
     .select('slug, keyword')
     .eq('is_published', true)
-    .ilike('keyword', `Rüyada ${upperLetter}%`) // Kritik Filtreleme
+    .ilike('keyword', `Rüyada ${upperLetter}%`) 
     .order('keyword', { ascending: true });
-
-  if (!ruyalar || ruyalar.length === 0) {
-    // Eğer o harfle rüya yoksa 404 vermek yerine boş liste gösterelim, bot küsmesin
-    // Ama kullanıcıya bilgi verelim
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -55,7 +52,7 @@ export default async function HarfPage({ params }: Props) {
           <h1 className="text-3xl font-bold text-gray-900">
             <span className="text-blue-600">{upperLetter}</span> Harfi ile Başlayan Rüyalar
           </h1>
-          <p className="text-gray-500 mt-2">Toplaö {ruyalar?.length || 0} sonuç bulundu.</p>
+          <p className="text-gray-500 mt-2">Toplam {ruyalar?.length || 0} sonuç bulundu.</p>
           <div className="mt-6">
             <Link href="/" className="text-sm text-blue-600 hover:underline">← Ana Sayfaya Dön</Link>
           </div>
@@ -85,7 +82,6 @@ export default async function HarfPage({ params }: Props) {
           </div>
         )}
 
-        {/* Sayfanın Altına Tekrar Navigasyon Koyuyoruz (SEO İçin Müthiş) */}
         <AlphabetNav />
         
       </main>
