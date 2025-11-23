@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
   
   // YENİ: Harf sayfalarını oluştur
-  const ALFABE = "abcdefgğhıijklmnoöprsştuüvyz".split("");
+  const ALFABE = "abcdefghıijklmnoöprsştuüvyz".split("");
   const letterUrls: MetadataRoute.Sitemap = ALFABE.map(char => ({
     url: `${BASE_URL}/harf/${char}`,
     lastModified: new Date(),

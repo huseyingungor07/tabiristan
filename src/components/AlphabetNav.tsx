@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-const ALFABE = "ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ".split("");
+const ALFABE = "ABCÇDEFGHIİJKLMNOÖPRSŞTUÜVYZ".split("");
 
 export default function AlphabetNav() {
   return (
