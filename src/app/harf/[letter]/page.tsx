@@ -12,7 +12,7 @@ type Props = {
 // Dinamik Metadata
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { letter } = await params;
-  const upperLetter = letter.toUpperCase('tr-TR');
+  const upperLetter = letter.toLocaleUpperCase('tr-TR');
   
   return {
     title: `${upperLetter} Harfi ile Başlayan Rüyalar | Tabiristan`,
