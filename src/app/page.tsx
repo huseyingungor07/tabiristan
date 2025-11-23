@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { supabase } from '@/lib/supabase'; // Lib klasörünü oluşturmuştuk
 import SearchableDreamList from '../components/SearchableDreamList'; // Bileşeni import ettik
+import AlphabetNav from '../components/AlphabetNav';
 
 
 
@@ -50,6 +51,11 @@ export default async function Home() {
             <SearchableDreamList initialRuyalar={ruyalar || []} />
         </div>
       </main>
+
+      {/* YENİ EKLENEN KISIM: A-Z İNDEKSİ */}
+      <section className="bg-gray-50 pb-12">
+        <AlphabetNav />
+      </section>
 
       <footer className="bg-gray-800 text-gray-400 py-12 text-center mt-12 border-t border-gray-700">
         <p>© {new Date().getFullYear()} Tabiristan.com</p>
