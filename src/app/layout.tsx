@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tabiristan",
   description: "Rüyalarınızın gizli dilini çözün. Yapay zeka destekli, en kapsamlı rüya ansiklopedisi.",
+  verification: {
+    other: {
+      "p:domain_verify": "893996b9a3192200080f47fcd49a0c83", // Sadece tırnak içindeki kodu
+    },
+  },
 };
 
 export default function RootLayout({
