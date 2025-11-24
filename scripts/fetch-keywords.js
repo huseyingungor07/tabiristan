@@ -1,47 +1,46 @@
-// scripts/fetch-keywords.js
 require('dotenv').config({ path: '.env.local' });
-const fs = require('fs');
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Ayarlar
-const DATA_FILE = path.join(__dirname, '../src/data/ruyalar.json');
-const API_KEY = process.env.GEMINI_API_KEY;
-const ALFABE = "ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ".split(""); // Türk Alfabesi
+// AYARLAR
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const genAI = new GoogleGenerativeAI(API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+// GÜVENLİ ANAHTAR YÖNETİMİ
+let keysString = process.env.GOOGLE_KEYS;
+if (!keysString) keysString = process.env.GEMINI_API_KEY;
+if (!keysString) { console.error("HATA: API Anahtarı bulunamadı!"); process.exit(1); }
+const API_KEYS = keysString.split(',').map(key => key.trim());
 
-// Yardımcı: Türkçe Slug Yapıcı
+// DÜZELTME: "Ğ" harfini alfabeden çıkardık
+const ALFABE = "ABCÇDEFGHIİJKLMNOÖPRSŞTUÜVYZ".split(""); 
+
+// Rastgele bir key seçerek başlat
+const genAI = new GoogleGenerativeAI(API_KEYS[Math.floor(Math.random() * API_KEYS.length)]);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+
 function slugify(text) {
     return text.toString().toLowerCase()
-        .replace(/\s+/g, '-')           // Boşlukları tire yap
+        .replace(/\s+/g, '-') 
         .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
         .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
-        .replace(/[^\w\-]+/g, '')       // Alfanümerik olmayanları sil
-        .replace(/\-\-+/g, '-')         // Çift tireleri tek yap
-        .replace(/^-+/, '')             // Baştaki tireyi sil
-        .replace(/-+$/, '');            // Sondaki tireyi sil
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
 }
 
 async function expandList() {
-    // Mevcut listeyi oku
-    let ruyalar = [];
-    if (fs.existsSync(DATA_FILE)) {
-        ruyalar = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    }
-    
-    console.log(`Mevcut rüya sayısı: ${ruyalar.length}`);
-    console.log("İmparatorluk genişletiliyor...");
+    console.log("🚀 İmparatorluk genişletiliyor (Doğrudan Veritabanına)...");
 
     for (const harf of ALFABE) {
         console.log(`\n[${harf}] harfi taranıyor...`);
 
         try {
             const prompt = `
-            Bana rüya tabirleri sitem için '${harf}' harfi ile başlayan, Türkiye'de insanların en çok arattığı en popüler 300 rüyayı listele.
+            Bana rüya tabirleri sitem için '${harf}' harfi ile başlayan, Türkiye'de insanların en çok arattığı en popüler 30 rüyayı listele.
             
-            Sadece şu formatta saf bir JSON Array ver (Markdown yok, açıklama yok):
+            ÖNEMLİ: Sadece JSON Array ver. Asla "Ğ" ile başlayan uydurma kelime yazma.
+            Format:
             [
                 "Rüyada [rüya konusu] görmek",
                 "Rüyada [rüya konusu] yapmak"
@@ -52,39 +51,45 @@ async function expandList() {
             const response = await result.response;
             let text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
             
-            // Bazen AI virgül hatası yapabilir, try-catch ile koruyalım
             const yeniKelimeler = JSON.parse(text);
-
             let eklenenSayisi = 0;
 
-            yeniKelimeler.forEach(keyword => {
-                // Slug oluştur
+            for (const keyword of yeniKelimeler) {
+                // Ekstra Güvenlik: Eğer hala Ğ ile başlayan gelirse atla
+                if (keyword.toLowerCase().startsWith("rüyada ğ")) {
+                    console.log(`   ⚠️ Uydurma veri engellendi: ${keyword}`);
+                    continue;
+                }
+
                 const slug = slugify(keyword);
 
-                // Zaten var mı kontrol et (Duplicate önleme)
-                const varMi = ruyalar.find(r => r.slug === slug);
+                // Veritabanına "Sadece yoksa ekle" (ON CONFLICT DO NOTHING)
+                const { error } = await supabase
+                    .from('ruyalar')
+                    .upsert({ 
+                        slug: slug, 
+                        keyword: keyword,
+                        // created_at ve is_published varsayılan değerlerini alır
+                    }, { onConflict: 'slug', ignoreDuplicates: true });
 
-                if (!varMi) {
-                    ruyalar.push({ slug, keyword });
-                    eklenenSayisi++;
+                if (!error) {
+                    // Supabase bize 'ignoreDuplicates' durumunda kaç satır eklendiğini doğrudan söylemez
+                    // ama hata yoksa denedik demektir.
+                    eklenenSayisi++; 
                 }
-            });
+            }
 
-            console.log(`   + ${eklenenSayisi} yeni rüya eklendi.`);
-
-            // Her harften sonra dosyayı kaydet (Veri kaybını önlemek için)
-            fs.writeFileSync(DATA_FILE, JSON.stringify(ruyalar, null, 2));
-
-            // API Limiti için bekleme (Flash modeli hızlıdır ama nezaketen bekleyelim)
+            console.log(`   + ${eklenenSayisi} aday rüya veritabanına gönderildi.`);
+            
+            // Nezaket beklemesi
             await new Promise(r => setTimeout(r, 2000));
 
         } catch (error) {
-            console.error(`   [HATA] ${harf} harfi işlenirken sorun oldu:`, error.message);
+            console.error(`   [HATA] ${harf} işlenirken sorun:`, error.message);
         }
     }
 
-    console.log(`\n=== TAMAMLANDI ===`);
-    console.log(`Yeni Toplam Rüya Sayısı: ${ruyalar.length}`);
+    console.log(`\n=== TARAMA TAMAMLANDI ===`);
 }
 
 expandList();

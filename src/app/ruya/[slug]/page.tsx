@@ -1,46 +1,17 @@
-import fs from 'fs';
-import path from 'path';
+import { supabase } from '@/lib/supabase';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Metadata } from 'next';
-import { supabase } from '@/lib/supabase';
 
+// Next.js 16 için params tipi
 type Props = {
   params: Promise<{ slug: string }>;
 };
 
-type RuyaContent = {
-  title: string;
-  metaDescription: string;
-  content: string;
-};
+// Sayfayı 1 saat önbellekte tut (ISR)
+export const revalidate = 3600;
 
-// Yardımcı Fonksiyon: Tüm listeyi okur
-async function getAllRuyalar() {
-  const filePath = path.join(process.cwd(), 'src/data/ruyalar.json');
-  if (!fs.existsSync(filePath)) return [];
-  const fileContents = fs.readFileSync(filePath, 'utf8');
-  return JSON.parse(fileContents);
-}
-
-// Yardımcı Fonksiyon: Rastgele X eleman seçer
-function getRandomRuyalar(allRuyalar: any[], currentSlug: string, count: number) {
-  // Şu anki rüyayı listeden çıkar
-  const filtered = allRuyalar.filter(r => r.slug !== currentSlug);
-  // Listeyi karıştır
-  const shuffled = filtered.sort(() => 0.5 - Math.random());
-  // İlk X taneyi al
-  return shuffled.slice(0, count);
-}
-
-// ... generateMetadata ve getRuyaData fonksiyonları AYNI KALSIN ...
-// (Buraya yukarıdaki kodun aynısını veya önceki cevaptaki fonksiyonları koymalısın)
-// Ben yer kaplamasın diye tekrar yazmıyorum, sen önceki halini koru.
-// Sadece getRuyaData ve generateMetadata fonksiyonları kalsın.
-
-export const revalidate = 3600; // Sayfayı önbelleğe al
-
-// --- ÖNEMLİ: Bu fonksiyonu silme, yukarıda tanımlı varsayıyorum ---
+// YARDIMCI: Veritabanından Rüya Detayını Çek
 async function getRuyaData(slug: string) {
   const { data } = await supabase
     .from('ruyalar')
@@ -51,26 +22,74 @@ async function getRuyaData(slug: string) {
   return data;
 }
 
+// YARDIMCI: Yan Menü İçin Benzer Rüyaları Çek (Supabase'den)
+async function getRelatedRuyalar(currentSlug: string) {
+  // Rastgelelik sağlamak için 20 tane çekip içinden 6 tane seçiyoruz
+  // (Not: Büyük veride .rpc() kullanmak daha iyidir ama şimdilik bu yeterli)
+  const { data } = await supabase
+    .from('ruyalar')
+    .select('slug, keyword')
+    .eq('is_published', true)
+    .neq('slug', currentSlug) // Kendisini hariç tut
+    .limit(20);
+
+  if (!data) return [];
+
+  // JavaScript ile karıştır ve ilk 6'yı al
+  return data.sort(() => 0.5 - Math.random()).slice(0, 6);
+}
+
+// SEO VE METADATA (Open Graph / Twitter Kartları Dahil)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    const { slug } = await params;
-    const data = await getRuyaData(slug);
-    if (!data) return { title: 'Rüya Bulunamadı' };
-    return {
-      title: `${data.title} | Tabiristan`,
-      description: data.metaDescription,
-      alternates: { canonical: `https://tabiristan.com/ruya/${slug}` },
-    };
-  }
-// ------------------------------------------------------------------
-
-
-export default async function RuyaDetail({ params }: Props) {
   const { slug } = await params;
   const data = await getRuyaData(slug);
   
-  // YENİ: Benzer rüyaları çekiyoruz
-  const allRuyalar = await getAllRuyalar();
-  const relatedRuyalar = getRandomRuyalar(allRuyalar, slug, 6); // 6 tane rastgele
+  if (!data) return { title: 'Rüya Bulunamadı' };
+
+  // Pinterest için oluşturduğumuz görselin yolu
+  // Örn: https://tabiristan.com/pins/ruyada-elma-gormek.jpg
+  const imageUrl = `https://tabiristan.com/pins/${slug}.jpg`;
+
+  return {
+    title: `${data.title} | Tabiristan`,
+    description: data.metaDescription,
+    alternates: {
+      canonical: `https://tabiristan.com/ruya/${slug}`,
+    },
+    // Sosyal Medya Kartları (WhatsApp, Facebook, Pinterest vb.)
+    openGraph: {
+      title: data.title,
+      description: data.metaDescription,
+      type: 'article',
+      url: `https://tabiristan.com/ruya/${slug}`,
+      images: [
+        {
+          url: imageUrl, // <-- Otomatik üretilen görsel burada
+          width: 1000,
+          height: 1500,
+          alt: data.title,
+        },
+      ],
+    },
+    // Twitter Kartları
+    twitter: {
+      card: 'summary_large_image',
+      title: data.title,
+      description: data.metaDescription,
+      images: [imageUrl],
+    },
+  };
+}
+
+// ANA SAYFA BİLEŞENİ
+export default async function RuyaDetail({ params }: Props) {
+  const { slug } = await params;
+  
+  // Verileri paralel çekelim (Daha hızlı açılır)
+  const [data, relatedRuyalar] = await Promise.all([
+    getRuyaData(slug),
+    getRelatedRuyalar(slug)
+  ]);
 
   if (!data) {
     notFound();
@@ -88,7 +107,7 @@ export default async function RuyaDetail({ params }: Props) {
 
       <main className="max-w-4xl mx-auto px-4 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* SOL KOLON: Ana Makale (2 birim genişlik) */}
+        {/* SOL KOLON: Ana Makale */}
         <article className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 md:p-10 border border-gray-100 h-fit">
           <header className="mb-8 border-b pb-6">
             <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4 leading-tight">
@@ -110,15 +129,14 @@ export default async function RuyaDetail({ params }: Props) {
           <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Reklam</p>
             <div className="h-32 bg-gray-200 rounded w-full flex items-center justify-center text-gray-400">
-              Google AdSense Gelecek
+              Google AdSense Alanı
             </div>
           </div>
         </article>
 
-        {/* SAĞ KOLON: Sidebar & Bunları da Gördünüz mü? (1 birim genişlik) */}
+        {/* SAĞ KOLON: Sidebar & Bunları da Gördünüz mü? */}
         <aside className="lg:col-span-1 space-y-6">
           
-          {/* Benzer Rüyalar Kartı */}
           <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 sticky top-4">
             <h3 className="text-lg font-bold text-gray-900 mb-4 border-l-4 border-blue-500 pl-3">
               Bunları da Gördünüz mü?
