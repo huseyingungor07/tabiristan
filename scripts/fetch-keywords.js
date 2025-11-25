@@ -16,7 +16,7 @@ const ALFABE = "ABCÇDEFGHIİJKLMNOÖPRSŞTUÜVYZ".split("");
 
 // Rastgele bir key seçerek başlat
 const genAI = new GoogleGenerativeAI(API_KEYS[Math.floor(Math.random() * API_KEYS.length)]);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 function slugify(text) {
     return text.toString().toLowerCase()
