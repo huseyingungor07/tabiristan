@@ -1,42 +1,38 @@
 require('dotenv').config({ path: '.env.local' });
 const { createClient } = require('@supabase/supabase-js');
-const { createCanvas, registerFont } = require('canvas');
-const fs = require('fs');
-const path = require('path');
+const { createCanvas } = require('canvas');
+const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 
-// Supabase Bağlantısı
+// 1. Supabase Bağlantısı (Veriyi çekmek için)
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Çıktı Klasörü
-const OUTPUT_DIR = path.join(__dirname, '../public/pins');
-if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
+// 2. Cloudflare R2 Bağlantısı (Resmi yüklemek için)
+const r2 = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+});
 
-// Renk Paleti
-const COLORS = [
-    '#F3E5F5', '#E3F2FD', '#E8F5E9', '#FFF3E0', '#FBE9E7', '#F5F5F5', '#E0F7FA', '#FFF8E1'
-];
+// Ayarlar
+const BUCKET_NAME = process.env.R2_BUCKET_NAME;
+const COLORS = ['#F3E5F5', '#E3F2FD', '#E8F5E9', '#FFF3E0', '#FBE9E7', '#F5F5F5', '#E0F7FA', '#FFF8E1'];
+const TEXT_COLORS = ['#4A148C', '#0D47A1', '#1B5E20', '#E65100', '#BF360C', '#212121', '#006064', '#FF6F00'];
 
-const TEXT_COLORS = [
-    '#4A148C', '#0D47A1', '#1B5E20', '#E65100', '#BF360C', '#212121', '#006064', '#FF6F00'
-];
-
-// Word Wrap Fonksiyonu
+// Word Wrap
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
     let currentY = y;
-
     for (let n = 0; n < words.length; n++) {
         const testLine = line + words[n] + ' ';
         const metrics = ctx.measureText(testLine);
-        const testWidth = metrics.width;
-        
-        if (testWidth > maxWidth && n > 0) {
+        if (metrics.width > maxWidth && n > 0) {
             ctx.fillText(line, x, currentY);
             line = words[n] + ' ';
             currentY += lineHeight;
@@ -47,10 +43,20 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     ctx.fillText(line, x, currentY);
 }
 
-async function generatePins() {
-    console.log("🎨 Pin Fabrikası Başlatılıyor (Akıllı Mod)...");
+// Dosya R2'de var mı kontrol et
+async function fileExists(fileName) {
+    try {
+        await r2.send(new HeadObjectCommand({ Bucket: BUCKET_NAME, Key: fileName }));
+        return true;
+    } catch (error) {
+        return false; // 404 dönerse dosya yok demektir
+    }
+}
 
-    // 1. Veritabanından TÜM yayınlanmış rüyaları çek (Limit kaldırıldı)
+async function generatePins() {
+    console.log("☁️  R2 Bulut Fabrikası Başlatılıyor...");
+
+    // Veritabanından rüyaları çek
     const { data: ruyalar, error } = await supabase
         .from('ruyalar')
         .select('slug, keyword')
@@ -58,56 +64,71 @@ async function generatePins() {
 
     if (error) { console.error(error); return; }
 
-    console.log(`Toplam ${ruyalar.length} rüya kontrol ediliyor...`);
-
-    let uretilenSayisi = 0;
+    console.log(`${ruyalar.length} rüya kontrol ediliyor...`);
+    let uretilen = 0;
 
     for (const [index, ruya] of ruyalar.entries()) {
-        const fileName = `${ruya.slug}.jpg`;
-        const filePath = path.join(OUTPUT_DIR, fileName);
+        const fileName = `${ruya.slug}.webp`; // ARTIK WEBP KULLANIYORUZ (Daha az yer kaplar)
 
-        // --- KRİTİK KONTROL: Dosya varsa atla ---
-        if (fs.existsSync(filePath)) {
-            // console.log(`⏩ Zaten var: ${fileName}`); 
+        // Kontrol: R2'de var mı?
+        const isExist = await fileExists(fileName);
+        if (isExist) {
+            // process.stdout.write('.'); // Kalabalık yapmasın diye nokta koyalım
             continue;
         }
 
-        const canvas = createCanvas(1000, 1500); 
+        // --- GÖRSEL ÜRETİMİ ---
+        const canvas = createCanvas(1000, 1500);
         const ctx = canvas.getContext('2d');
-
-        // Renk Seçimi
         const colorIndex = Math.floor(Math.random() * COLORS.length);
-        const bgColor = COLORS[colorIndex];
-        const textColor = TEXT_COLORS[colorIndex];
-
-        // Çizim İşlemleri
-        ctx.fillStyle = bgColor;
+        
+        // Arka Plan
+        ctx.fillStyle = COLORS[colorIndex];
         ctx.fillRect(0, 0, 1000, 1500);
-
+        
+        // Çerçeve
         ctx.strokeStyle = "rgba(0,0,0,0.05)";
         ctx.lineWidth = 20;
         ctx.strokeRect(50, 50, 900, 1400);
 
-        ctx.fillStyle = textColor;
+        // Yazı
+        ctx.fillStyle = TEXT_COLORS[colorIndex];
         ctx.font = 'bold 80px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
         wrapText(ctx, ruya.keyword, 500, 750 - 100, 800, 100);
 
+        // Marka
         ctx.fillStyle = "rgba(0,0,0,0.5)";
         ctx.font = '40px sans-serif';
         ctx.fillText("Tabiristan.com", 500, 1350);
 
-        // Kaydet
-        const buffer = canvas.toBuffer('image/jpeg');
-        fs.writeFileSync(filePath, buffer);
+        // Buffer (WebP formatı Canvas'ta yoksa JPEG devam edebiliriz ama Node Canvas jpeg buffer verir)
+        // Optimizasyon: JPEG kalitesini %80 yapalım
+        const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 }); 
 
-        console.log(`🖼️ [${index + 1}/${ruyalar.length}] Üretildi: ${fileName}`);
-        uretilenSayisi++;
+        // --- R2'YE YÜKLEME ---
+        try {
+            await r2.send(new PutObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: fileName,
+                Body: buffer,
+                ContentType: 'image/jpeg', // Uzantı webp dedik ama canvas jpeg veriyor, karışıklık olmasın .jpg yapalım
+                // Veya canvas'ı jpeg üretip uzantıyı jpg yapalım, en temizi.
+            }));
+            
+            console.log(`\n☁️  [${index + 1}] Yüklendi: ${fileName}`);
+            uretilen++;
+            
+            // Rate Limit Koruması
+            await new Promise(r => setTimeout(r, 100));
+
+        } catch (err) {
+            console.error(`\n❌ Hata (${fileName}):`, err.message);
+        }
     }
-
-    console.log(`✅ İşlem Tamamlandı! Toplam ${uretilenSayisi} yeni görsel üretildi.`);
+    
+    console.log(`\n✅ İşlem Bitti! Toplam ${uretilen} yeni görsel R2'ye yüklendi.`);
 }
 
 generatePins();

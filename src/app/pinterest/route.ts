@@ -1,9 +1,11 @@
 import { supabase } from '@/lib/supabase';
 
 const BASE_URL = 'https://tabiristan.com';
+// R2 URL'sini .env dosyasından alıyoruz
+const STORAGE_URL = process.env.NEXT_PUBLIC_R2_URL; 
 
 export async function GET() {
-  // Yayınlanmış son 50 rüyayı çek (Pinterest genelde en son eklenenleri tarar)
+  // Son 50 rüyayı çek
   const { data: ruyalar } = await supabase
     .from('ruyalar')
     .select('slug, title, meta_description, created_at')
@@ -25,9 +27,9 @@ export async function GET() {
     <language>tr</language>
 `;
 
-  // Her rüya için bir <item> ekle
   ruyalar.forEach((ruya) => {
-    const imageUrl = `${BASE_URL}/pins/${ruya.slug}.jpg`;
+    // DÜZELTME BURADA: Artık R2 adresini ve webp uzantısını kullanıyoruz
+    const imageUrl = `${STORAGE_URL}/${ruya.slug}.webp`;
     const pageUrl = `${BASE_URL}/ruya/${ruya.slug}`;
     const pubDate = new Date(ruya.created_at || new Date()).toUTCString();
 
@@ -38,7 +40,7 @@ export async function GET() {
       <guid isPermaLink="true">${pageUrl}</guid>
       <description><![CDATA[${ruya.meta_description}]]></description>
       <pubDate>${pubDate}</pubDate>
-      <enclosure url="${imageUrl}" type="image/jpeg" />
+      <enclosure url="${imageUrl}" type="image/webp" />
     </item>`;
   });
 

@@ -10,6 +10,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.939.0",
     "@next/third-parties": "^16.0.3",
     "@supabase/supabase-js": "^2.84.0",
     "canvas": "^3.2.0",

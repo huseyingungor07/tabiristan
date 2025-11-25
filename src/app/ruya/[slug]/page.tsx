@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   // Pinterest için oluşturduğumuz görselin yolu
   // Örn: https://tabiristan.com/pins/ruyada-elma-gormek.jpg
-  const imageUrl = `https://tabiristan.com/pins/${slug}.jpg`;
+  const imageUrl = `${process.env.NEXT_PUBLIC_R2_URL}/${slug}.webp`;
 
   return {
     title: `${data.title} | Tabiristan`,
