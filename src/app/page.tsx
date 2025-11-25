@@ -1,66 +1,55 @@
-import fs from 'fs';
-import path from 'path';
-import { supabase } from '@/lib/supabase'; // Lib klasörünü oluşturmuştuk
-import SearchableDreamList from '../components/SearchableDreamList'; // Bileşeni import ettik
+import { supabase } from '@/lib/supabase';
+import SearchableDreamList from '../components/SearchableDreamList';
 import AlphabetNav from '../components/AlphabetNav';
 
-
-
-// Rüya Listesini Okuyan Fonksiyon (Server tarafında çalışır)
-async function getRuyaList() {
-  const filePath = path.join(process.cwd(), 'src/data/ruyalar.json');
-  if (!fs.existsSync(filePath)) return [];
-  const fileContents = fs.readFileSync(filePath, 'utf8');
-  return JSON.parse(fileContents);
-}
-
-// Cache'i 1 saat tut (ISR) - Veritabanına her saniye gitmesin
-export const revalidate = 3600;
-
+export const revalidate = 3600; 
 
 export default async function Home() {
-  // Sadece gerekli alanları çekiyoruz (Hız için)
+  // Son 100 rüyayı çekiyoruz
   const { data: ruyalar } = await supabase
     .from('ruyalar')
     .select('slug, keyword')
-    .eq('is_published', true) // Sadece içeriği hazır olanları göster
-    .order('keyword', { ascending: true });
+    .eq('is_published', true)
+    .order('created_at', { ascending: false }) 
+    .limit(99);
 
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* Hero (Karşılama) Bölümü */}
-      <section className="bg-gradient-to-r from-blue-700 to-blue-900 text-white py-24 px-4 text-center">
+      {/* Hero Bölümü */}
+      <section className="bg-gradient-to-r from-blue-700 to-blue-900 text-white pt-20 pb-24 px-4 text-center">
         <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight">
           Tabiristan
         </h1>
         <p className="text-xl md:text-2xl text-blue-100 max-w-2xl mx-auto font-light">
-          Rüyalarınızın gizli dilini çözün. Yapay zeka destekli, en kapsamlı rüya ansiklopedisi.
+          Rüyalarınızın gizli dilini çözün.
         </p>
       </section>
 
-      {/* Arama ve Liste Alanı */}
-      <main className="max-w-6xl mx-auto px-4 py-12 -mt-10 relative z-10">
-        <div className="bg-white/50 backdrop-blur-sm rounded-3xl p-6 md:p-8">
+      <main className="max-w-6xl mx-auto px-4 py-12 -mt-16 relative z-10">
+        <div className="bg-white/95 backdrop-blur-sm rounded-3xl p-6 md:p-10 shadow-xl border border-white/20">
+            
+            {/* 1. ÖNCE HARF FİLTRESİ (Minimal Haliyle) */}
+            <div className="mb-8 text-center">
+                <p className="text-xs text-gray-400 uppercase tracking-widest mb-3 font-semibold">
+                    Alfabetik İndeks
+                </p>
+                <AlphabetNav />
+            </div>
+
+            <hr className="border-gray-100 mb-8" />
+            
+            {/* 2. SONRA ARAMA VE LİSTE */}
             <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-              Rüya Rehberi
+              Son Eklenen Rüyalar
             </h2>
             
-            {/* İstemci Bileşenini (Client Component) buraya koyuyoruz */}
-            {/* Veriyi prop olarak gönderiyoruz */}
             <SearchableDreamList initialRuyalar={ruyalar || []} />
+
         </div>
       </main>
 
-      {/* YENİ EKLENEN KISIM: A-Z İNDEKSİ */}
-      <section className="bg-gray-50 pb-12">
-        <AlphabetNav />
-      </section>
-
-      <footer className="bg-gray-800 text-gray-400 py-12 text-center mt-12 border-t border-gray-700">
-        <p>© {new Date().getFullYear()} Tabiristan.com</p>
-        <p className="text-sm mt-2 text-gray-500">Rüyalarınızın rehberi.</p>
-      </footer>
+  
     </div>
   );
 }
