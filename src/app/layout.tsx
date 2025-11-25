@@ -38,12 +38,14 @@ export default function RootLayout({
         {/* G- Kodunu buraya yazıyorsun nnn*/}
         <GoogleAnalytics gaId="G-8EKSSYR1WK" />
 
-        {/* 2. AdSense (MANUEL YÖNTEM - KESİN ÇALIŞIR) */}
-        {/* ca-pub kodunu linkin sonundaki X'lerin yerine yaz */}
+        {/* 2. AdSense (KESİN KOD) */}
         <Script
+          id="adsense-init"
           async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4462865736634031"
-          crossOrigin="anonymous"></Script>
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4462865736634031`}
+          crossOrigin="anonymous" 
+          strategy="afterInteractive"
+        />
 
 
 
