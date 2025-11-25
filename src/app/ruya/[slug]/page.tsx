@@ -68,6 +68,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           width: 1000,
           height: 1500,
           alt: data.title,
+          type: 'image/webp',
         },
       ],
     },
