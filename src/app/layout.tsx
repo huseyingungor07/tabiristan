@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { GoogleAnalytics } from '@next/third-parties/google';
 import Footer from "@/components/Footer";
+import Script from "next/script";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -36,6 +37,17 @@ export default function RootLayout({
       >
         {/* G- Kodunu buraya yazıyorsun nnn*/}
         <GoogleAnalytics gaId="G-8EKSSYR1WK" />
+
+        {/* 2. AdSense (MANUEL YÖNTEM - KESİN ÇALIŞIR) */}
+        {/* ca-pub kodunu linkin sonundaki X'lerin yerine yaz */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4462865736634031"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+
+
 
         {children}
 
