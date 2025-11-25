@@ -127,6 +127,7 @@ export default async function RuyaDetail({ params }: Props) {
                 className="object-cover hover:scale-105 transition-transform duration-500"
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw"
                 priority // Sayfa açılır açılmaz yüklensin
+                unoptimized 
               />
             </div>
 
