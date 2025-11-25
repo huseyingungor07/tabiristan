@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Metadata } from 'next';
+import Image from 'next/image';
 
 // Next.js 16 için params tipi
 type Props = {
@@ -95,6 +96,8 @@ export default async function RuyaDetail({ params }: Props) {
   if (!data) {
     notFound();
   }
+  // Resim URL'si
+  const imageUrl = `${process.env.NEXT_PUBLIC_R2_URL}/${slug}.webp`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -114,6 +117,19 @@ export default async function RuyaDetail({ params }: Props) {
             <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4 leading-tight">
               {data.title}
             </h1>
+
+          {/* --- YENİ: ÖNE ÇIKAN GÖRSEL --- */}
+            <div className="relative w-full h-64 md:h-80 mb-8 rounded-xl overflow-hidden shadow-md">
+              <Image
+                src={imageUrl}
+                alt={data.title}
+                fill
+                className="object-cover hover:scale-105 transition-transform duration-500"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw"
+                priority // Sayfa açılır açılmaz yüklensin
+              />
+            </div>
+
             <p className="text-lg text-gray-600 leading-relaxed">
               {data.metaDescription}
             </p>
@@ -126,13 +142,7 @@ export default async function RuyaDetail({ params }: Props) {
             dangerouslySetInnerHTML={{ __html: data.content }}
           />
 
-          {/* AdSense Alanı */}
-          <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
-            <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Reklam</p>
-            <div className="h-32 bg-gray-200 rounded w-full flex items-center justify-center text-gray-400">
-              Google AdSense Alanı
-            </div>
-          </div>
+         
         </article>
 
         {/* SAĞ KOLON: Sidebar & Bunları da Gördünüz mü? */}
