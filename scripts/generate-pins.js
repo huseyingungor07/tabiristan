@@ -3,13 +3,13 @@ const { createClient } = require('@supabase/supabase-js');
 const { createCanvas } = require('canvas');
 const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 
-// 1. Supabase Bağlantısı (Veriyi çekmek için)
+// 1. Supabase Bağlantısı
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 2. Cloudflare R2 Bağlantısı (Resmi yüklemek için)
+// 2. Cloudflare R2 Bağlantısı
 const r2 = new S3Client({
     region: "auto",
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -24,7 +24,7 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME;
 const COLORS = ['#F3E5F5', '#E3F2FD', '#E8F5E9', '#FFF3E0', '#FBE9E7', '#F5F5F5', '#E0F7FA', '#FFF8E1'];
 const TEXT_COLORS = ['#4A148C', '#0D47A1', '#1B5E20', '#E65100', '#BF360C', '#212121', '#006064', '#FF6F00'];
 
-// Word Wrap
+// Word Wrap (Metin Kaydırma)
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
@@ -54,81 +54,104 @@ async function fileExists(fileName) {
 }
 
 async function generatePins() {
-    console.log("☁️  R2 Bulut Fabrikası Başlatılıyor...");
+    console.log("☁️  R2 Bulut Fabrikası Başlatılıyor (Sınırsız/Pagination Modu)...");
 
-    // Veritabanından rüyaları çek
-    const { data: ruyalar, error } = await supabase
-        .from('ruyalar')
-        .select('slug, keyword')
-        .eq('is_published', true);
+    const PAGE_SIZE = 1000; // Her seferde kaç veri çekilecek
+    let page = 0;
+    let hasMore = true;
+    let totalProcessed = 0;
+    let totalSkipped = 0;
 
-    if (error) { console.error(error); return; }
+    while (hasMore) {
+        // Sayfalama ile veri çekme (0-999, 1000-1999...)
+        // Supabase range fonksiyonu (başlangıç, bitiş) indekslerini alır
+        const { data: ruyalar, error } = await supabase
+            .from('ruyalar')
+            .select('slug, keyword')
+            .eq('is_published', true)
+            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-    console.log(`${ruyalar.length} rüya kontrol ediliyor...`);
-    let uretilen = 0;
-
-    for (const [index, ruya] of ruyalar.entries()) {
-        const fileName = `${ruya.slug}.webp`; // ARTIK WEBP KULLANIYORUZ (Daha az yer kaplar)
-
-        // Kontrol: R2'de var mı?
-        const isExist = await fileExists(fileName);
-        if (isExist) {
-            // process.stdout.write('.'); // Kalabalık yapmasın diye nokta koyalım
-            continue;
+        if (error) {
+            console.error("❌ Veri çekme hatası:", error.message);
+            break;
         }
 
-        // --- GÖRSEL ÜRETİMİ ---
-        const canvas = createCanvas(1000, 1500);
-        const ctx = canvas.getContext('2d');
-        const colorIndex = Math.floor(Math.random() * COLORS.length);
-        
-        // Arka Plan
-        ctx.fillStyle = COLORS[colorIndex];
-        ctx.fillRect(0, 0, 1000, 1500);
-        
-        // Çerçeve
-        ctx.strokeStyle = "rgba(0,0,0,0.05)";
-        ctx.lineWidth = 20;
-        ctx.strokeRect(50, 50, 900, 1400);
-
-        // Yazı
-        ctx.fillStyle = TEXT_COLORS[colorIndex];
-        ctx.font = 'bold 80px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        wrapText(ctx, ruya.keyword, 500, 750 - 100, 800, 100);
-
-        // Marka
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.font = '40px sans-serif';
-        ctx.fillText("Tabiristan.com", 500, 1350);
-
-        // Buffer (WebP formatı Canvas'ta yoksa JPEG devam edebiliriz ama Node Canvas jpeg buffer verir)
-        // Optimizasyon: JPEG kalitesini %80 yapalım
-        const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 }); 
-
-        // --- R2'YE YÜKLEME ---
-        try {
-            await r2.send(new PutObjectCommand({
-                Bucket: BUCKET_NAME,
-                Key: fileName,
-                Body: buffer,
-                ContentType: 'image/jpeg', // Uzantı webp dedik ama canvas jpeg veriyor, karışıklık olmasın .jpg yapalım
-                // Veya canvas'ı jpeg üretip uzantıyı jpg yapalım, en temizi.
-            }));
-            
-            console.log(`\n☁️  [${index + 1}] Yüklendi: ${fileName}`);
-            uretilen++;
-            
-            // Rate Limit Koruması
-            await new Promise(r => setTimeout(r, 100));
-
-        } catch (err) {
-            console.error(`\n❌ Hata (${fileName}):`, err.message);
+        // Eğer veri gelmediyse bitmiş demektir
+        if (!ruyalar || ruyalar.length === 0) {
+            hasMore = false;
+            console.log("✅ Tüm veritabanı tarandı.");
+            break;
         }
+
+        console.log(`\n📦 PAKET ${page + 1}: ${ruyalar.length} adet rüya işleniyor...`);
+
+        for (const ruya of ruyalar) {
+            const fileName = `${ruya.slug}.webp`;
+
+            // KONTROL: R2'de var mı?
+            const isExist = await fileExists(fileName);
+            if (isExist) {
+                // console.log(`⏩ Atlandı: ${fileName}`); // Kalabalık etmemesi için kapalı
+                totalSkipped++;
+                continue;
+            }
+
+            // --- GÖRSEL ÜRETİMİ ---
+            const canvas = createCanvas(1000, 1500);
+            const ctx = canvas.getContext('2d');
+            const colorIndex = Math.floor(Math.random() * COLORS.length);
+            
+            // Arka Plan
+            ctx.fillStyle = COLORS[colorIndex];
+            ctx.fillRect(0, 0, 1000, 1500);
+            
+            // Çerçeve
+            ctx.strokeStyle = "rgba(0,0,0,0.05)";
+            ctx.lineWidth = 20;
+            ctx.strokeRect(50, 50, 900, 1400);
+
+            // Yazı
+            ctx.fillStyle = TEXT_COLORS[colorIndex];
+            ctx.font = 'bold 80px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            wrapText(ctx, ruya.keyword, 500, 750 - 100, 800, 100);
+
+            // Marka
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.font = '40px sans-serif';
+            ctx.fillText("Tabiristan.com", 500, 1350);
+
+            // Buffer (WebP uzantılı kaydediyoruz ama Canvas default JPEG/PNG verir, R2'ye yüklerken ContentType önemli)
+            const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 }); 
+
+            // --- R2'YE YÜKLEME ---
+            try {
+                await r2.send(new PutObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: fileName,
+                    Body: buffer,
+                    ContentType: 'image/webp', // Tarayıcılar anlasın diye
+                }));
+                
+                console.log(`☁️  Yüklendi: ${fileName}`);
+                totalProcessed++;
+                
+                // Rate Limit Koruması (Çok hızlı yüklersek Cloudflare bazen reddedebilir)
+                await new Promise(r => setTimeout(r, 50));
+
+            } catch (err) {
+                console.error(`❌ Yükleme Hatası (${fileName}):`, err.message);
+            }
+        }
+
+        // Bir sonraki sayfaya geç
+        page++;
     }
     
-    console.log(`\n✅ İşlem Bitti! Toplam ${uretilen} yeni görsel R2'ye yüklendi.`);
+    console.log(`\n🎉 BÜYÜK İŞLEM BİTTİ!`);
+    console.log(`📊 Toplam Yüklenen: ${totalProcessed}`);
+    console.log(`⏭️  Zaten Var Olduğu İçin Atlanan: ${totalSkipped}`);
 }
 
 generatePins();

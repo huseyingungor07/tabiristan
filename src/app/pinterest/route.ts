@@ -11,7 +11,7 @@ export async function GET() {
     .select('slug, title, meta_description, created_at')
     .eq('is_published', true)
     .order('created_at', { ascending: false })
-    .limit(50); 
+    .limit(1250); 
 
   if (!ruyalar) {
     return new Response('Veri bulunamadı', { status: 404 });
