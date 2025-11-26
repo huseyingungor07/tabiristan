@@ -1,34 +1,38 @@
 import { supabase } from '@/lib/supabase';
 
 const BASE_URL = 'https://tabiristan.com';
-// R2 URL'sini .env dosyasından alıyoruz
 const STORAGE_URL = process.env.NEXT_PUBLIC_R2_URL; 
 
 export async function GET() {
-  // Son 50 rüyayı çek
+  // Pinterest için son 1000 rüyayı çekiyoruz
   const { data: ruyalar } = await supabase
     .from('ruyalar')
     .select('slug, title, meta_description, created_at')
     .eq('is_published', true)
     .order('created_at', { ascending: false })
-    .limit(1250); 
+    .limit(1000); 
 
   if (!ruyalar) {
     return new Response('Veri bulunamadı', { status: 404 });
   }
 
   // XML Başlangıcı
+  // DÜZELTME 1: xmlns:atom eklendi (Standart gereği)
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/">
+<rss version="2.0" 
+     xmlns:content="http://purl.org/rss/1.0/modules/content/" 
+     xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+     xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Tabiristan - En Son Rüyalar</title>
     <link>${BASE_URL}</link>
     <description>Yapay zeka destekli rüya tabirleri ansiklopedisi.</description>
     <language>tr</language>
+    
+    <atom:link href="${BASE_URL}/pinterest" rel="self" type="application/rss+xml" />
 `;
 
   ruyalar.forEach((ruya) => {
-    // DÜZELTME BURADA: Artık R2 adresini ve webp uzantısını kullanıyoruz
     const imageUrl = `${STORAGE_URL}/${ruya.slug}.webp`;
     const pageUrl = `${BASE_URL}/ruya/${ruya.slug}`;
     const pubDate = new Date(ruya.created_at || new Date()).toUTCString();
@@ -40,7 +44,8 @@ export async function GET() {
       <guid isPermaLink="true">${pageUrl}</guid>
       <description><![CDATA[${ruya.meta_description}]]></description>
       <pubDate>${pubDate}</pubDate>
-      <enclosure url="${imageUrl}" type="image/webp" />
+      
+      <enclosure url="${imageUrl}" type="image/webp" length="0" />
     </item>`;
   });
 
