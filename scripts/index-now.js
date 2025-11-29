@@ -43,7 +43,7 @@ async function indexPages() {
             .select('slug')
             .eq('is_published', true)
             .order('created_at', { ascending: false }) 
-            .limit(100);
+            .limit(200);
 
         if (error) throw error;
 
