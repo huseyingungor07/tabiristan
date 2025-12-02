@@ -22,6 +22,13 @@ export const metadata: Metadata = {
       "p:domain_verify": "893996b9a3192200080f47fcd49a0c83", // Sadece tırnak içindeki kodu
     },
   },
+
+  icons: {
+    icon: '/favicon.ico', // public klasöründeyse
+    // veya
+    // icon: '/icon.png',
+    apple: '/apple-icon.png', // iPhone'lar için
+  },
 };
 
 export default function RootLayout({
