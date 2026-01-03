@@ -19,7 +19,7 @@ export default function ContactPage() {
           href="mailto:iletisim@tabiristan.com" 
           className="text-2xl md:text-3xl font-bold text-blue-600 hover:text-blue-800 transition-colors"
         >
-            cikcilliempire@gmail.com
+            iletisim@tabiristan.com
         </a>
         <p className="text-sm text-gray-400 mt-6">
           Genellikle 24 saat içinde dönüş yapıyoruz.

@@ -1,35 +1,15 @@
 require('dotenv').config({ path: '.env.local' });
 const { createClient } = require('@supabase/supabase-js');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // AYARLAR
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// 1. KAYNAK: Google API Anahtarları
-const GOOGLE_KEYS = (process.env.GOOGLE_KEYS || "").split(',').map(k => k.trim()).filter(k => k.length > 0);
+// LOKAL MODEL AYARI (OLLAMA)
+// Terminalde indirdiğin modelin adı:
+const LOCAL_MODEL_NAME = "gemma2:27b"; 
+const OLLAMA_API_URL = "http://localhost:11434/api/chat";
 
-// 2. KAYNAK: OpenRouter Anahtarı
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-
-// MODELLER (Update scripti ile aynı standartta)
-const GOOGLE_DIRECT_MODEL = "gemini-2.5-flash-lite"; 
-const OPENROUTER_MODEL = "google/gemini-2.0-flash-exp:free";
-
-// DURUM DEĞİŞKENLERİ
-let googleKeyIndex = 0; 
-let useOpenRouter = false; 
-
-// KONTROLLER
-if (GOOGLE_KEYS.length === 0) {
-    console.error("❌ HATA: .env.local içinde GOOGLE_KEYS bulunamadı!");
-    process.exit(1);
-}
-if (!OPENROUTER_API_KEY) {
-    console.error("❌ HATA: .env.local içinde OPENROUTER_API_KEY bulunamadı!");
-    process.exit(1);
-}
-
-// ZENGİN İÇERİK PROMPTU (Update scripti ile BİREBİR AYNI)
+// ORİJİNAL PROMPT (HİÇ DOKUNULMADI)
 const RICH_PROMPT_TEMPLATE = (keyword) => `
 Sen deneyimli bir rüya tabircisi ve Türkçe dil uzmanısın. Konumuz: "${keyword}".
 
@@ -64,8 +44,6 @@ Makale SEO uyumlu, zengin ve en az 600 kelime olsun.
 }
 `;
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 // --- ÜTÜLEME VE TEMİZLEME ---
 function aggressiveCleanJSON(rawText) {
     let clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -80,149 +58,81 @@ function aggressiveCleanJSON(rawText) {
     return JSON.parse(clean);
 }
 
-// --- 1. YÖNTEM: GOOGLE DIRECT API ---
-async function tryGoogleDirect(prompt) {
-    const currentKey = GOOGLE_KEYS[googleKeyIndex];
-    
-    const genAI = new GoogleGenerativeAI(currentKey);
-    const model = genAI.getGenerativeModel({ 
-        model: GOOGLE_DIRECT_MODEL,
-        generationConfig: { responseMimeType: "application/json" }
-    });
-
+// --- OLLAMA İLE KONUŞMA ---
+async function generateWithLocalLLM(prompt) {
     try {
-        const result = await model.generateContent(prompt);
-        return result.response.text();
+        const response = await fetch(OLLAMA_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model: LOCAL_MODEL_NAME,
+                messages: [
+                    { role: "system", content: "You output ONLY minified valid JSON. No English words. No line breaks." },
+                    { role: "user", content: prompt }
+                ],
+                stream: false,
+                options: {
+                    temperature: 0.7,
+                    num_ctx: 8192 // Gemma 27B için hafızayı geniş tuttuk
+                }
+            })
+        });
+
+        if (!response.ok) throw new Error(`Ollama Hatası: ${response.statusText}`);
+        const data = await response.json();
+        return data.message.content;
+
     } catch (error) {
-        if (error.message.includes('429') || error.message.includes('quota') || error.message.includes('exhausted')) {
-            console.warn(`⚠️ Google Anahtar #${googleKeyIndex + 1} kotası doldu.`);
-            googleKeyIndex++;
-            
-            if (googleKeyIndex >= GOOGLE_KEYS.length) {
-                console.warn("🛑 TÜM GOOGLE ANAHTARLARI TÜKENDİ! OpenRouter'a geçiliyor...");
-                useOpenRouter = true; 
-                throw new Error("SWITCH_TO_OPENROUTER");
-            } else {
-                console.log(`🔄 Sıradaki Google hesabına geçiliyor (#${googleKeyIndex + 1})...`);
-                return tryGoogleDirect(prompt);
-            }
-        }
         throw error;
     }
 }
 
-// --- 2. YÖNTEM: OPENROUTER API ---
-async function tryOpenRouter(prompt) {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://tabiristan.com", 
-        },
-        body: JSON.stringify({
-            model: OPENROUTER_MODEL,
-            messages: [
-                { role: "system", content: "You output ONLY minified valid JSON. No line breaks." },
-                { role: "user", content: prompt }
-            ],
-            temperature: 0.7,
-        })
-    });
+async function generateTestRun() {
+    console.log(`🚀 M4 PRO MOTORU ÇALIŞTIRILIYOR (Generate DB - Model: ${LOCAL_MODEL_NAME})...`);
 
-    if (!response.ok) {
-        if (response.status === 429) {
-            throw new Error("OPENROUTER_BUSY");
-        }
-        const errText = await response.text();
-        throw new Error(`OpenRouter Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-}
-
-// --- ANA YÖNETİCİ ---
-async function generateContentWrapper(prompt) {
-    if (useOpenRouter) {
-        return await tryOpenRouter(prompt);
-    }
-    try {
-        return await tryGoogleDirect(prompt);
-    } catch (error) {
-        if (error.message === "SWITCH_TO_OPENROUTER") {
-            return await tryOpenRouter(prompt);
-        }
-        throw error;
-    }
-}
-
-async function generateNewContent() {
-    console.log("🚀 YENİ İÇERİK ÜRETİMİ (GENERATE-DB) BAŞLIYOR...");
-    console.log(`ℹ️ Strateji: 5 Google Hesabı -> OpenRouter Yedekli`);
-
-    // SADECE İÇERİĞİ BOŞ OLANLARI ÇEK
+    // SADECE 1 TANE ÇEKİYORUZ (TEST İÇİN)
     const { data: ruyalar, error } = await supabase
         .from('ruyalar')
         .select('id, keyword')
-        .is('content', null) // <--- KRİTİK FİLTRE: Sadece boşlar
-        .limit(50); 
+        .is('content', null) // Sadece boş olanlar
+        .limit(1); // <--- İSTEDİĞİN GİBİ LİMİT 1
 
-    if (error) { console.error("Veri çekme hatası:", error); return; }
-    
-    if (!ruyalar || ruyalar.length === 0) {
-        console.log("🎉 TEBRİKLER! Tüm içerikler tamamlanmış (Boş veri yok).");
-        return;
-    }
+    if (error) { console.error("Veri hatası:", error); return; }
+    if (!ruyalar || ruyalar.length === 0) { console.log("İşlenecek veri yok."); return; }
 
-    console.log(`📋 ${ruyalar.length} adet yeni rüya yazılacak.`);
+    const ruya = ruyalar[0];
+    console.log(`🧪 Test Edilen Rüya: "${ruya.keyword}"`);
+    console.log("⏳ Gemma düşünüyor (Lütfen bekleyin)...");
 
-    for (const ruya of ruyalar) {
-        let success = false;
-        let retryCount = 0;
-        const maxRetries = 10; 
+    const startTime = Date.now();
 
-        while (!success && retryCount < maxRetries) {
-            try {
-                const sourceName = useOpenRouter ? "OpenRouter" : `Google Hesap #${googleKeyIndex + 1}`;
-                console.log(`✍️ [${sourceName}]: "${ruya.keyword}"...`);
+    try {
+        // 1. Üret
+        const rawText = await generateWithLocalLLM(RICH_PROMPT_TEMPLATE(ruya.keyword));
+        
+        // 2. Temizle
+        const jsonContent = aggressiveCleanJSON(rawText);
 
-                // İçerik üret
-                const rawText = await generateContentWrapper(RICH_PROMPT_TEMPLATE(ruya.keyword));
-                const jsonContent = aggressiveCleanJSON(rawText);
+        // 3. Yaz (Veritabanı)
+        const { error: updateError } = await supabase
+            .from('ruyalar')
+            .update({
+                title: jsonContent.title,
+                meta_description: jsonContent.metaDescription,
+                content: jsonContent.content,
+                is_published: true,
+                is_upgraded: true
+            })
+            .eq('id', ruya.id);
 
-                // Veritabanına YENİ Kayıt
-                const { error: updateError } = await supabase
-                    .from('ruyalar')
-                    .update({
-                        title: jsonContent.title,
-                        meta_description: jsonContent.metaDescription,
-                        content: jsonContent.content,
-                        is_published: true,
-                        is_upgraded: true // <--- İŞTE İSTEDİĞİN ÖZELLİK: Diğer script bunu pas geçecek.
-                    })
-                    .eq('id', ruya.id);
+        if (updateError) throw updateError;
 
-                if (updateError) throw updateError;
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`✅ OLUŞTURULDU! "${ruya.keyword}" (${duration} saniye)`);
 
-                console.log(`✅ [OLUŞTURULDU]: ${ruya.keyword}`);
-                success = true;
-                
-                const waitTime = useOpenRouter ? 5000 : 2000; 
-                await sleep(waitTime);
-
-            } catch (err) {
-                if (err.message === "OPENROUTER_BUSY") {
-                    retryCount++;
-                    console.log(`⏳ OpenRouter yoğun, 10sn bekleniyor... (Deneme ${retryCount})`);
-                    await sleep(10000);
-                } else {
-                    console.error(`❌ HATA (${ruya.keyword}):`, err.message);
-                    break;
-                }
-            }
-        }
+    } catch (err) {
+        console.error("❌ HATA:", err.message);
     }
 }
 
-generateNewContent();
+generateTestRun();

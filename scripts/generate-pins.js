@@ -63,12 +63,13 @@ async function generatePins() {
     let totalSkipped = 0;
 
     while (hasMore) {
-        // Sayfalama ile veri çekme (0-999, 1000-1999...)
-        // Supabase range fonksiyonu (başlangıç, bitiş) indekslerini alır
+        // Sayfalama ile veri çekme
+        // KRİTİK DÜZELTME: .order() eklendi. Artık veriler sabit bir sırada gelir, atlama yapmaz.
         const { data: ruyalar, error } = await supabase
             .from('ruyalar')
             .select('slug, keyword')
             .eq('is_published', true)
+            .order('id', { ascending: true }) // <--- İŞTE EKLENEN PARÇA
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (error) {
@@ -91,7 +92,6 @@ async function generatePins() {
             // KONTROL: R2'de var mı?
             const isExist = await fileExists(fileName);
             if (isExist) {
-                // console.log(`⏩ Atlandı: ${fileName}`); // Kalabalık etmemesi için kapalı
                 totalSkipped++;
                 continue;
             }
@@ -122,7 +122,7 @@ async function generatePins() {
             ctx.font = '40px sans-serif';
             ctx.fillText("Tabiristan.com", 500, 1350);
 
-            // Buffer (WebP uzantılı kaydediyoruz ama Canvas default JPEG/PNG verir, R2'ye yüklerken ContentType önemli)
+            // Buffer
             const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 }); 
 
             // --- R2'YE YÜKLEME ---
@@ -131,13 +131,13 @@ async function generatePins() {
                     Bucket: BUCKET_NAME,
                     Key: fileName,
                     Body: buffer,
-                    ContentType: 'image/webp', // Tarayıcılar anlasın diye
+                    ContentType: 'image/webp',
                 }));
                 
                 console.log(`☁️  Yüklendi: ${fileName}`);
                 totalProcessed++;
                 
-                // Rate Limit Koruması (Çok hızlı yüklersek Cloudflare bazen reddedebilir)
+                // Rate Limit Koruması
                 await new Promise(r => setTimeout(r, 50));
 
             } catch (err) {

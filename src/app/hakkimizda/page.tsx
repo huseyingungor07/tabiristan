@@ -17,12 +17,12 @@ export default function AboutPage() {
         
         <h3>Misyonumuz</h3>
         <p>
-          Rüyalar, insanlık tarihi boyunca merak konusu olmuştur. Bizim amacımız, İslami kaynaklardan (İbn-i Sirin, Nablusi gibi alimlerin yorumları) ve modern psikolojiden (Carl Jung, Freud yaklaşıımları) harmanladığımız bilgileri, en anlaşılır ve erişilebilir şekilde sizlere sunmaktır.
+          Rüyalar, insanlık tarihi boyunca merak konusu olmuştur. Bizim amacımız, İslami kaynaklardan ve modern psikolojiden harmanladığımız bilgileri, en anlaşılır ve erişilebilir şekilde sizlere sunmaktır.
         </p>
 
         <h3>Teknoloji ve Güven</h3>
         <p>
-          Veritabanımızda binlerce rüya sembolü bulunmaktadır. İçeriklerimiz, editörlerimiz ve gelişmiş yapay zeka teknolojileri tarafından titizlikle hazırlanmakta, sürekli güncellenmekte ve zenginleştirilmektedir.
+          Veritabanımızda binlerce rüya sembolü bulunmaktadır. Veritabanımızda binlerce rüya sembolü bulunmaktadır. İçeriklerimiz; İslami kaynaklar ve modern psikoloji literatürü taranarak, uzman editör ekibimiz tarafından titizlikle derlenmekte ve dijital teknolojiler yardımıyla zenginleştirilerek sizlere sunulmaktadır.
         </p>
 
         <p>

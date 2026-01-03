@@ -9,7 +9,7 @@ export default function Footer() {
         <div>
           <h3 className="text-white text-lg font-bold mb-4">Tabiristan</h3>
           <p className="text-sm text-gray-500">
-            Yapay zeka destekli, Türkiye'nin en kapsamlı ve güvenilir rüya tabirleri ansiklopedisi.
+            Türkiye'nin en kapsamlı ve güvenilir rüya tabirleri ansiklopedisi.
           </p>
         </div>
 
