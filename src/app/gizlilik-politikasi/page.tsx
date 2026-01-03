@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Gizlilik Politikası | Tabiristan',
-  robots: { index: false }, // Google bu sayfayı indekslemesin, gereksiz
+  robots: { index: false }, // Google bu sayfayı indekslemesin, gereksiza
 };
 
 export default function PrivacyPage() {
