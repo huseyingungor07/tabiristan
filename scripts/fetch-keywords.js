@@ -5,7 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // LOKAL MODEL AYARLARI (OLLAMA)
-const LOCAL_MODEL_NAME = "gemma2:27b"; // Senin indirdiğin model
+const LOCAL_MODEL_NAME = "gemma3:4b"; // Senin indirdiğin model
 const OLLAMA_API_URL = "http://localhost:11434/api/chat";
 
 // ALFABE (Dosyadaki gibi "Ğ" harfi çıkarılmış hali)

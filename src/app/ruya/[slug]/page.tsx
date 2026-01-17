@@ -119,13 +119,13 @@ export default async function RuyaDetail({ params }: Props) {
             </h1>
 
           {/* --- YENİ: ÖNE ÇIKAN GÖRSEL --- */}
-            <div className="relative w-full h-64 md:h-80 mb-8 rounded-xl overflow-hidden shadow-md">
+            <div className="relative w-full h-[300px] md:h-[400px] lg:h-[500px] overflow-hidden rounded-xl">
               <Image
                 src={imageUrl}
                 alt={data.title}
                 fill
-                className="object-cover hover:scale-105 transition-transform duration-500"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw"
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
                 priority // Sayfa açılır açılmaz yüklensin
                 unoptimized 
               />

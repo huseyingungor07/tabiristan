@@ -5,6 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // LOKAL MODEL AYARI (OLLAMA)
+// Terminalde indirdiğin modelin adı:
 const LOCAL_MODEL_NAME = "gemma3:4b"; 
 const OLLAMA_API_URL = "http://localhost:11434/api/chat";
 
@@ -13,12 +14,12 @@ const RICH_PROMPT_TEMPLATE = (keyword) => `
 Sen deneyimli bir rüya tabircisi ve Türkçe dil uzmanısın. Konumuz: "${keyword}".
 
 Bana aşağıdaki JSON formatında bir çıktı ver.
-Makale SEO uyumlu, zengin ve en az 800 kelime olsun.
+Makale SEO uyumlu, zengin ve en az 600 kelime olsun.
 
 *** DİL KURALLARI ***
 1. %100 Akıcı İstanbul Türkçesi kullan.
 2. ASLA İngilizce kelime kullanma. "Literal", "Necessary" gibi kelimeler YASAK.
-3. Deyimleri doğru kullan.
+3. "Yarım gece" deme, "Gece yarısı" de. Deyimleri doğru kullan.
 4. Samimi ama bilgi verici bir ton kullan. Okuyucuya "Sen" diye hitap et.
 
 İstenen JSON Formatı:
@@ -42,8 +43,6 @@ Makale SEO uyumlu, zengin ve en az 800 kelime olsun.
     "
 }
 `;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- ÜTÜLEME VE TEMİZLEME ---
 function aggressiveCleanJSON(rawText) {
@@ -74,9 +73,7 @@ async function generateWithLocalLLM(prompt) {
                 stream: false,
                 options: {
                     temperature: 0.7,
-                    num_ctx: 4096,
-                    num_predict: 2500
-                    
+                    num_ctx: 16384 // Gemma 27B için hafızayı geniş tuttuk
                 }
             })
         });
@@ -90,61 +87,55 @@ async function generateWithLocalLLM(prompt) {
     }
 }
 
-async function updateExistingContent() {
-    console.log(`🚀 M4 PRO UPDATE OPERASYONU (Model: ${LOCAL_MODEL_NAME})...`);
+async function generateTestRun() {
+    console.log(`🚀 M4 PRO MOTORU ÇALIŞTIRILIYOR (Generate DB - Model: ${LOCAL_MODEL_NAME})...`);
 
-    // GÜNCELLENMEMİŞ OLANLARI ÇEK
+    // SADECE 1 TANE ÇEKİYORUZ (TEST İÇİN)
     const { data: ruyalar, error } = await supabase
         .from('ruyalar')
         .select('id, keyword')
-        .eq('is_published', true)
-        .eq('is_upgraded', false) // Sadece eskiler
-        .limit(60); // M4 Pro hızlıdır, 50-50 gidebilirsin.
+        .is('content', null) // Sadece boş olanlar
+        .limit(1); // <--- İSTEDİĞİN GİBİ LİMİT 1
 
-    if (error) { console.error("Veri çekme hatası:", error); return; }
-    
-    if (!ruyalar || ruyalar.length === 0) {
-        console.log("🎉 TEBRİKLER! Güncellenecek içerik kalmadı.");
-        return;
-    }
+    if (error) { console.error("Veri hatası:", error); return; }
+    if (!ruyalar || ruyalar.length === 0) { console.log("İşlenecek veri yok."); return; }
 
-    console.log(`📋 Bu partide ${ruyalar.length} rüya işlenecek.`);
+    const ruya = ruyalar[0];
+    console.log(`🧪 Test Edilen Rüya: "${ruya.keyword}"`);
+    console.log("⏳ Gemma düşünüyor (Lütfen bekleyin)...");
 
-    for (const ruya of ruyalar) {
-        try {
-            console.log(`✍️ [Gemma]: "${ruya.keyword}"...`);
-            
-            const startTime = Date.now();
+    const startTime = Date.now();
 
-            // İçerik üret
-            const rawText = await generateWithLocalLLM(RICH_PROMPT_TEMPLATE(ruya.keyword));
-            const jsonContent = aggressiveCleanJSON(rawText);
+    try {
+        // 1. Üret
+        const rawText = await generateWithLocalLLM(RICH_PROMPT_TEMPLATE(ruya.keyword));
+        
+        // 2. Temizle
+        const jsonContent = aggressiveCleanJSON(rawText);
 
-            // Veritabanına yaz
-            const { error: updateError } = await supabase
-                .from('ruyalar')
-                .update({
-                    title: jsonContent.title,
-                    meta_description: jsonContent.metaDescription,
-                    content: jsonContent.content,
-                    is_upgraded: true
-                })
-                .eq('id', ruya.id);
+        // generate-db.js satır 37 civarı (aggressiveCleanJSON fonksiyonundan sonra bir yere ekle)
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-            if (updateError) throw updateError;
+        // 3. Yaz (Veritabanı)
+        const { error: updateError } = await supabase
+            .from('ruyalar')
+            .update({
+                title: jsonContent.title,
+                meta_description: jsonContent.metaDescription,
+                content: jsonContent.content,
+                is_published: true,
+                is_upgraded: true
+            })
+            .eq('id', ruya.id);
 
-            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`✅ [GÜNCELLENDİ]: ${ruya.keyword} (${duration}sn)`);
-            
-            // Cihazı aşırı yormamak için kısa bekleme
-            await sleep(15000);
+        if (updateError) throw updateError;
 
-        } catch (err) {
-            console.error(`❌ HATA (${ruya.keyword}):`, err.message);
-            // Hata sonrası biraz bekle
-            await sleep(15000);
-        }
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`✅ OLUŞTURULDU! "${ruya.keyword}" (${duration} saniye)`);
+
+    } catch (err) {
+        console.error("❌ HATA:", err.message);
     }
 }
 
-updateExistingContent();
+generateTestRun();
