@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 const BASE_URL = 'https://tabiristan.com';
+// DİKKAT: Bu değişkenin Vercel/Sunucu ortam değişkenlerinde tanımlı olduğundan emin ol!
 const STORAGE_URL = process.env.NEXT_PUBLIC_R2_URL; 
 
 export async function GET() {
@@ -17,12 +18,13 @@ export async function GET() {
   }
 
   // XML Başlangıcı
-  // DÜZELTME 1: xmlns:atom eklendi (Standart gereği)
+  // GÜNCELLEME: xmlns:media EKLENDİ (Pinterest'in şart koştuğu standart)
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" 
      xmlns:content="http://purl.org/rss/1.0/modules/content/" 
      xmlns:wfw="http://wellformedweb.org/CommentAPI/"
-     xmlns:atom="http://www.w3.org/2005/Atom">
+     xmlns:atom="http://www.w3.org/2005/Atom"
+     xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>Tabiristan - En Son Rüyalar</title>
     <link>${BASE_URL}</link>
@@ -33,7 +35,9 @@ export async function GET() {
 `;
 
   ruyalar.forEach((ruya) => {
-    const imageUrl = `${STORAGE_URL}/${ruya.slug}.webp`;
+    // URL'in sonuna slash gelip gelmemesini garantiye alıyoruz
+    const safeStorageUrl = STORAGE_URL?.replace(/\/$/, ''); 
+    const imageUrl = `${safeStorageUrl}/${ruya.slug}.webp`;
     const pageUrl = `${BASE_URL}/ruya/${ruya.slug}`;
     const pubDate = new Date(ruya.created_at || new Date()).toUTCString();
 
@@ -46,6 +50,11 @@ export async function GET() {
       <pubDate>${pubDate}</pubDate>
       
       <enclosure url="${imageUrl}" type="image/webp" length="0" />
+      
+      <media:content url="${imageUrl}" type="image/webp" medium="image" width="1000" height="1500">
+        <media:title type="html"><![CDATA[${ruya.title}]]></media:title>
+        <media:description type="html"><![CDATA[${ruya.meta_description}]]></media:description>
+      </media:content>
     </item>`;
   });
 
@@ -55,7 +64,8 @@ export async function GET() {
 
   return new Response(xml, {
     headers: {
-      'Content-Type': 'application/xml; charset=utf-8',
+      'Content-Type': 'text/xml; charset=utf-8', // application/xml yerine text/xml bazen daha iyi çalışır
+      'Cache-Control': 's-maxage=3600, stale-while-revalidate', // 1 saat cache
     },
   });
 }
