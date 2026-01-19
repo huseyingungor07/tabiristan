@@ -49,7 +49,7 @@ export async function GET() {
       <description><![CDATA[${ruya.meta_description}]]></description>
       <pubDate>${pubDate}</pubDate>
       
-      <enclosure url="${imageUrl}" type="image/webp" length="0" />
+      <enclosure url="${imageUrl}" type="image/webp" length="150000" />
       
       <media:content url="${imageUrl}" type="image/webp" medium="image" width="1000" height="1500">
         <media:title type="html"><![CDATA[${ruya.title}]]></media:title>
