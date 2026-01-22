@@ -1,24 +1,27 @@
 import { supabase } from '@/lib/supabase';
 
+// BU SATIR ÇOK ÖNEMLİ: Sayfanın statik olmasını engeller
+export const dynamic = 'force-dynamic'; 
+
 const BASE_URL = 'https://tabiristan.com';
-// DİKKAT: Bu değişkenin Vercel/Sunucu ortam değişkenlerinde tanımlı olduğundan emin ol!
 const STORAGE_URL = process.env.NEXT_PUBLIC_R2_URL; 
 
 export async function GET() {
-  // Pinterest için son 1000 rüyayı çekiyoruz
+  console.log("RSS İsteği Geldi - Taze Veri Çekiliyor..."); // Loglara bakalım
+
+  // Pinterest için son 50 rüyayı çek (Sayıyı düşürdük ki hızlı açılsın, test edelim)
   const { data: ruyalar } = await supabase
     .from('ruyalar')
     .select('slug, title, meta_description, created_at')
     .eq('is_published', true)
     .order('created_at', { ascending: false })
-    .limit(1000); 
+    .limit(50); 
 
   if (!ruyalar) {
     return new Response('Veri bulunamadı', { status: 404 });
   }
 
   // XML Başlangıcı
-  // GÜNCELLEME: xmlns:media EKLENDİ (Pinterest'in şart koştuğu standart)
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" 
      xmlns:content="http://purl.org/rss/1.0/modules/content/" 
@@ -30,14 +33,17 @@ export async function GET() {
     <link>${BASE_URL}</link>
     <description>Yapay zeka destekli rüya tabirleri ansiklopedisi.</description>
     <language>tr</language>
-    
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${BASE_URL}/pinterest" rel="self" type="application/rss+xml" />
 `;
 
   ruyalar.forEach((ruya) => {
-    // URL'in sonuna slash gelip gelmemesini garantiye alıyoruz
+    // URL güvenliği
     const safeStorageUrl = STORAGE_URL?.replace(/\/$/, ''); 
-    const imageUrl = `${safeStorageUrl}/${ruya.slug}.webp`;
+    
+    // CACHE BUSTING: Resim linkinin sonuna versiyon ekledik
+    const imageUrl = `${safeStorageUrl}/${ruya.slug}.webp?v=2`;
+    
     const pageUrl = `${BASE_URL}/ruya/${ruya.slug}`;
     const pubDate = new Date(ruya.created_at || new Date()).toUTCString();
 
@@ -49,11 +55,11 @@ export async function GET() {
       <description><![CDATA[${ruya.meta_description}]]></description>
       <pubDate>${pubDate}</pubDate>
       
-      <enclosure url="${imageUrl}" type="image/webp" length="150000" />
+      <enclosure url="${imageUrl}" type="image/webp" length="153600" />
       
-      <media:content url="${imageUrl}" type="image/webp" medium="image" width="1000" height="1500">
-        <media:title type="html"><![CDATA[${ruya.title}]]></media:title>
-        <media:description type="html"><![CDATA[${ruya.meta_description}]]></media:description>
+      <media:content url="${imageUrl}" type="image/webp" fileSize="153600" medium="image" width="1000" height="1500">
+        <media:title type="plain"><![CDATA[${ruya.title}]]></media:title>
+        <media:description type="plain"><![CDATA[${ruya.meta_description}]]></media:description>
       </media:content>
     </item>`;
   });
@@ -64,8 +70,11 @@ export async function GET() {
 
   return new Response(xml, {
     headers: {
-      'Content-Type': 'text/xml; charset=utf-8', // application/xml yerine text/xml bazen daha iyi çalışır
-      'Cache-Control': 's-maxage=3600, stale-while-revalidate', // 1 saat cache
+      'Content-Type': 'application/xml; charset=utf-8',
+      // CACHE'İ KAPATMA KOMUTLARI:
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     },
   });
 }
